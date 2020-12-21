@@ -17,7 +17,7 @@ from pathlib import Path
 import typer
 from typing import Optional
 
-def extract_conv_names(model):
+def extract_conv_names(model, init=4):
     # layers are G_synthesis/{res}x{res}/...
     # make a list of (name, resolution, level, position)
     # Currently assuming square(?)
@@ -25,7 +25,7 @@ def extract_conv_names(model):
     model_names = list(model.trainables.keys())
     conv_names = []
 
-    resolutions =  [4*2**x for x in range(9)]
+    resolutions =  [init*2**x for x in range(9)]
 
     level_names = [["Conv0_up", "Const"],
                     ["Conv1", "ToRGB"]]
@@ -38,10 +38,9 @@ def extract_conv_names(model):
             for suffix in level_suffixes:
                 search_name = root_name + suffix
                 matched_names = [x for x in model_names if x.startswith(search_name)]
-                to_add = [(name, f"{res}x{res}", level, position) for name in matched_names]
+                to_add = [(name, f"{int(res * 4 / init)}x{int(res * 4 / init)}", level, position) for name in matched_names]
                 conv_names.extend(to_add)
             position += 1
-
     return conv_names
 
 
@@ -52,15 +51,18 @@ def blend_models(model_1, model_2, resolution, level, blend_width=None, verbose=
     # TODO add small x offset for smoother blend animations
     resolution = f"{resolution}x{resolution}"
     
-    model_1_names = extract_conv_names(model_1)
+    model_1_names = extract_conv_names(model_1, 3)
     model_2_names = extract_conv_names(model_2)
 
-    assert all((x == y for x, y in zip(model_1_names, model_2_names)))
+    #assert all((x == y for x, y in zip(model_1_names, model_2_names)))
 
     model_out = model_1.clone()
 
     short_names = [(x[1:3]) for x in model_1_names]
     full_names = [(x[0]) for x in model_1_names]
+    sub_names = [(x[0]) for x in model_2_names]
+    print(sub_names, len(sub_names))
+    print(full_names, len(sub_names))
     mid_point_idx = short_names.index((resolution, level))
     mid_point_pos = model_1_names[mid_point_idx][3]
     
@@ -80,9 +82,9 @@ def blend_models(model_1, model_2, resolution, level, blend_width=None, verbose=
 
     tfutil.set_vars(
         tfutil.run(
-            {model_out.vars[name]: (model_2.vars[name] * y + model_1.vars[name] * (1-y))
-             for name, y 
-             in zip(full_names, ys)}
+            {model_out.vars[name]: (model_2.vars[sub_name] * y + model_1.vars[name] * (1-y))
+             for name, y, sub_name
+             in zip(full_names, ys, sub_names)}
         )
     )
 
@@ -109,10 +111,9 @@ def main(low_res_pkl: Path, # Pickle file from which to take low res layers
 
             out = blend_models(low_res_Gs, high_res_Gs, resolution, level, blend_width=blend_width, verbose=verbose)
 
-            rnd = np.random.RandomState(seed)
-            grid_latents = rnd.randn(np.prod(grid_size), *out.input_shape[1:])
-            
             if output_grid:
+                rnd = np.random.RandomState(seed)
+                grid_latents = rnd.randn(np.prod(grid_size), *out.input_shape[1:])
                 grid_fakes = out.run(grid_latents, None, is_validation=True, minibatch_size=1)
                 misc.save_image_grid(grid_fakes, output_grid, drange= [-1,1], grid_size=grid_size)
 

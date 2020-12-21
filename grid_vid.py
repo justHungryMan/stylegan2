@@ -47,8 +47,10 @@ def create_image_grid(images, grid_size=None):
 
     # grid_size=[4,4], mp4_fps=25, duration_sec=10.0, smoothing_sec=2.0, truncation_psi=0.7)
 from typing import Tuple
+import moviepy.editor # pip install moviepy
 
 def generate_interpolation_video(net: Path,
+                                 audio: moviepy.editor.AudioFileClip = None,
                                  mp4: Path = Path("output.mp4"), 
                                  truncation_psi:float =0.5,
                                  grid_size: Tuple[int, int]=(1,1), 
@@ -58,8 +60,8 @@ def generate_interpolation_video(net: Path,
                                  mp4_codec='libx264',
                                  random_seed:int = 1000,
                                  minibatch_size:int = 8,
-                                 output_width: int = typer.Option(None)):
-
+                                 output_width: int = typer.Option(None),
+                                 ):
     Gs = load_net(net)
     num_frames = int(np.rint(duration_sec * mp4_fps))
     random_state = np.random.RandomState(random_seed)
@@ -84,8 +86,9 @@ def generate_interpolation_video(net: Path,
         return grid
 
     # Generate video.
-    import moviepy.editor # pip install moviepy
     c = moviepy.editor.VideoClip(make_frame, duration=duration_sec)
+    if audio is not None:
+        c.audio = audio
     if output_width:
         c = c.resize(width=output_width)
     c.write_videofile(str(mp4), fps=mp4_fps, codec=mp4_codec)

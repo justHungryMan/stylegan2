@@ -92,6 +92,8 @@ class TFRecordExporter:
         
     def create_tfr_writer(self, shape):
         self.shape = [shape[2], shape[0], shape[1]]
+        print(self.shape)
+        print((2 ** self.res_log2))
         assert self.shape[0] in [1, 3]
         assert self.shape[1] % (2 ** self.res_log2) == 0
         assert self.shape[2] % (2 ** self.res_log2) == 0
@@ -899,7 +901,7 @@ def execute_cmdline(argv):
         "--res_log2",
         help="image width and height should be multiple of 2**res_log2 (default: 7)",
         type=int,
-        default=7
+        default=5
     )
     
     p = add_command(
